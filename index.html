@@ -1,0 +1,700 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Falcon DPR Command Center</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+/* Layout: sticky command bar (search, new, export) over KPI strip, a 12-col grid of chamfered instrument panels, then the records table with a slide-in editor. */
+:root{
+  --bg:#050A14; --bg2:#08111F; --panel:#0A1526; --panel2:#0E1B31;
+  --line:#17314F; --line2:#2A6A9A; --ink:#E6F1FF; --ink2:#9DB2CC; --muted:#6C86A6;
+  --cyan:#35E0FF; --cyan-dim:#0E5C70; --violet:#8B7BFF; --magenta:#E26BFF;
+  --amber:#FFB03B; --red:#FF5C7A; --green:#3DDC97; --slate:#62799C; --track:#14263F;
+  --head:'Chakra Petch','Segoe UI',system-ui,sans-serif;
+  --body:'IBM Plex Sans','Segoe UI',system-ui,sans-serif;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html{background:var(--bg)}
+body{
+  background:var(--bg); color:var(--ink); font:14px/1.5 var(--body);
+  padding-block:0 48px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));
+  padding-right:max(16px,env(safe-area-inset-right,0px));
+  background-image:
+    radial-gradient(900px 420px at 8% -5%, rgba(53,224,255,.10), transparent 60%),
+    linear-gradient(rgba(42,106,154,.07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(42,106,154,.07) 1px, transparent 1px);
+  background-size:auto,44px 44px,44px 44px;
+  background-attachment:fixed;
+}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);background:var(--bg);z-index:60}
+.wrap{max-width:1360px;margin:0 auto}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+.num{font-family:var(--head);font-variant-numeric:tabular-nums}
+td,th,.mval,.kv{font-variant-numeric:tabular-nums}
+
+/* top bar */
+.bar-top{position:sticky;top:env(safe-area-inset-top,0px);z-index:50;background:rgba(5,10,20,.92);backdrop-filter:blur(8px);
+  display:flex;flex-wrap:wrap;gap:12px 16px;align-items:center;padding:14px 0;border-bottom:1px solid var(--line)}
+.brand{display:flex;gap:12px;align-items:center;min-width:0}
+.brand svg{flex:none}
+.brand b{font:700 17px/1.1 var(--head);letter-spacing:.14em}
+.brand small{display:block;color:var(--muted);font-size:12px;letter-spacing:.04em}
+.search{flex:1 1 320px;position:relative;min-width:0}
+.search input{width:100%;height:44px;padding:0 64px 0 44px;background:var(--panel);border:1px solid var(--line2);border-radius:2px;
+  clip-path:polygon(0 0,calc(100% - 10px) 0,100% 10px,100% 100%,10px 100%,0 calc(100% - 10px));font-size:15px}
+.search input::placeholder{color:var(--muted)}
+.search input:focus{outline:none;border-color:var(--cyan);box-shadow:0 0 0 1px var(--cyan)}
+.search svg{position:absolute;left:14px;top:13px;color:var(--cyan)}
+.search kbd{position:absolute;right:16px;top:11px;font:600 12px var(--head);color:var(--muted);border:1px solid var(--line2);padding:1px 8px;border-radius:3px}
+.actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.btn{height:40px;padding:0 16px;border:1px solid var(--line2);background:var(--panel2);color:var(--ink);cursor:pointer;
+  font:600 13px var(--head);letter-spacing:.06em;display:inline-flex;align-items:center;gap:8px;border-radius:2px;
+  clip-path:polygon(0 0,calc(100% - 8px) 0,100% 8px,100% 100%,8px 100%,0 calc(100% - 8px))}
+.btn:hover{border-color:var(--cyan);color:var(--cyan)}
+.btn.pri{background:var(--cyan);border-color:var(--cyan);color:#021018}
+.btn.pri:hover{background:#7CEBFF;color:#021018}
+.btn.dng{border-color:var(--red);color:var(--red)}
+.btn.dng:hover{background:var(--red);color:#1A0309}
+.btn.sm{height:30px;padding:0 10px;font-size:12px}
+.btn[disabled]{opacity:.5;cursor:not-allowed}
+.seg{display:inline-flex;border:1px solid var(--line2);border-radius:2px;overflow:hidden}
+.seg button{height:38px;padding:0 14px;background:transparent;border:0;color:var(--ink2);cursor:pointer;font:600 12px var(--head);letter-spacing:.06em}
+.seg button[aria-pressed=true]{background:var(--cyan-dim);color:var(--ink)}
+.sync{font-size:12px;color:var(--muted);display:inline-flex;gap:6px;align-items:center;padding:0 4px}
+.sync i{width:8px;height:8px;border-radius:50%;background:var(--slate)}
+.sync.live i{background:var(--green);box-shadow:0 0 8px var(--green)}
+.sync.local i{background:var(--amber)}
+
+/* panel */
+.panel{--cut:14px;position:relative;background:linear-gradient(135deg,var(--line2),var(--line) 35%,var(--line));
+  clip-path:polygon(0 0,calc(100% - var(--cut)) 0,100% var(--cut),100% 100%,var(--cut) 100%,0 calc(100% - var(--cut)));min-width:0}
+.panel::before{content:"";position:absolute;inset:1px;background:linear-gradient(180deg,var(--panel2),var(--panel) 40%);
+  clip-path:polygon(0 0,calc(100% - var(--cut) + 1px) 0,100% calc(var(--cut) - 1px),100% 100%,calc(var(--cut) - 1px) 100%,0 calc(100% - var(--cut) + 1px))}
+.panel>*{position:relative}
+.pad{padding:18px 20px 20px}
+.ph{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+.ph h2{font:600 15px var(--head);letter-spacing:.1em;margin:0;text-transform:uppercase;color:var(--ink)}
+.ph p{margin:0;color:var(--muted);font-size:12px}
+
+.grid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:16px;margin-top:16px}
+.c7{grid-column:span 7}.c5{grid-column:span 5}.c12{grid-column:span 12}
+.kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;margin-top:20px}
+.kpi{cursor:default}
+.kpi.click{cursor:pointer}
+.kpi.click:hover::before{background:linear-gradient(180deg,#112543,var(--panel))}
+.kpi .pad{display:flex;gap:14px;align-items:center;justify-content:space-between;min-height:128px}
+.kpi h3{margin:0 0 6px;font:600 12px var(--head);letter-spacing:.12em;color:var(--ink2);text-transform:uppercase}
+.kpi .big{font:700 34px/1 var(--head);letter-spacing:.01em;white-space:nowrap}
+.kpi .big small{font-size:16px;color:var(--ink2);font-weight:500}
+.kpi .sub{color:var(--muted);font-size:12px;margin-top:8px}
+.ring{flex:none;position:relative;width:72px;height:72px}.ring svg{width:72px;height:72px}
+.ring svg{transform:rotate(-90deg)}
+.ring b{position:absolute;inset:0;display:grid;place-items:center;font:700 17px var(--head)}
+.ring circle{fill:none;stroke-width:8}
+.ring .t{stroke:var(--track)}
+.ring .v{stroke-linecap:butt;transition:stroke-dashoffset 1s cubic-bezier(.2,.7,.2,1)}
+
+/* charts */
+.legend{display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--ink2);margin-bottom:12px}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend i{width:10px;height:10px;border-radius:2px;display:inline-block}
+.d{background:var(--cyan)}.n{background:var(--slate)}.p{background:var(--amber)}
+.mrow{display:grid;grid-template-columns:minmax(96px,150px) minmax(0,1fr) 78px;gap:12px;align-items:center;padding:5px 0}
+.mlabel{font-size:13px;color:var(--ink)}
+.bar{display:flex;gap:2px;height:14px;background:transparent}
+.bar i{display:block;height:100%;min-width:0;transform-origin:left}
+.bar i:first-child{border-radius:3px 0 0 3px}.bar i:last-child{border-radius:0 3px 3px 0}.bar i:only-child{border-radius:3px}
+.first .bar i{animation:grow .9s cubic-bezier(.2,.7,.2,1) both}
+@keyframes grow{from{transform:scaleX(0)}}
+.mval{text-align:right;font:600 14px var(--head)}
+.mval small{color:var(--muted);font-weight:500}
+.cols{display:grid;grid-template-columns:repeat(9,minmax(52px,1fr));gap:10px;align-items:end;overflow-x:auto;padding-bottom:4px}
+.col{display:flex;flex-direction:column;align-items:center;gap:6px;min-width:0}
+.col .pct{font:700 14px var(--head)}
+.col .trk{width:100%;max-width:44px;height:132px;background:var(--amber);border-radius:3px;display:flex;align-items:flex-end;overflow:hidden;opacity:.9}
+.col .trk i{display:block;width:100%;background:var(--cyan);border-top:2px solid var(--panel);transform-origin:bottom}
+.first .col .trk i{animation:growy .9s cubic-bezier(.2,.7,.2,1) both}
+@keyframes growy{from{transform:scaleY(0)}}
+.col .nm{font-size:11px;color:var(--ink2);text-align:center;line-height:1.25;min-height:28px}
+.erow{display:grid;grid-template-columns:minmax(0,1fr) 62px;gap:4px 12px;align-items:center;padding:6px 8px;margin:0 -8px;cursor:pointer;border-radius:2px;border:0;background:none;text-align:left;width:calc(100% + 16px)}
+.erow:hover{background:rgba(53,224,255,.07)}
+.erow .en{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.erow .en em{font-style:normal;color:var(--muted);font-size:11px;margin-left:6px}
+.erow .ev{text-align:right;font:600 14px var(--head);color:var(--amber)}
+.erow .eb{grid-column:1/-1;height:6px;background:var(--track);border-radius:3px;overflow:hidden}
+.erow .eb i{display:block;height:100%;background:var(--amber);border-radius:3px}
+.stack{display:flex;gap:2px;height:22px;margin:4px 0 14px}
+.stack i{display:block;height:100%;min-width:3px}
+.stack i:first-child{border-radius:3px 0 0 3px}.stack i:last-child{border-radius:0 3px 3px 0}
+.blist{display:grid;gap:4px}
+.brow{display:grid;grid-template-columns:12px minmax(0,1fr) auto;gap:10px;align-items:center;padding:6px 8px;margin:0 -8px;border:0;background:none;cursor:pointer;text-align:left;border-radius:2px;width:calc(100% + 16px)}
+.brow:hover{background:rgba(53,224,255,.07)}
+.brow i{width:10px;height:10px;border-radius:2px}
+.brow b{font:600 14px var(--head)}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:14px}
+.chip{display:inline-flex;gap:6px;align-items:center;padding:3px 10px;border:1px solid var(--line2);border-radius:20px;font-size:12px;color:var(--ink2);background:transparent;cursor:pointer}
+.chip:hover{border-color:var(--cyan);color:var(--cyan)}
+.chip[aria-pressed=true]{background:var(--cyan-dim);border-color:var(--cyan);color:var(--ink)}
+.chip b{font-family:var(--head);color:var(--ink)}
+.chip.amber{border-color:var(--amber);color:var(--amber)}
+
+/* records */
+.tools{display:flex;flex-wrap:wrap;gap:10px 12px;align-items:center;margin-bottom:12px}
+.sel{height:34px;background:var(--panel);border:1px solid var(--line2);border-radius:2px;padding:0 10px;color:var(--ink)}
+.sel option{background:var(--panel)}
+.count{margin-left:auto;color:var(--muted);font-size:12px}
+.tw-wrap{overflow-x:auto;margin:0 -4px}
+table{width:100%;border-collapse:collapse;min-width:980px}
+th{font:600 11px var(--head);letter-spacing:.1em;text-transform:uppercase;color:var(--muted);text-align:left;padding:8px 10px;border-bottom:1px solid var(--line2);white-space:nowrap}
+th button{all:unset;cursor:pointer;display:inline-flex;gap:4px;align-items:center}
+th button:hover,th[aria-sort] button{color:var(--cyan)}
+td{padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
+tbody tr{cursor:pointer}
+tbody tr:hover td{background:rgba(53,224,255,.05)}
+tr.del td{opacity:.55}
+.idc b{font:600 13px var(--head);letter-spacing:.03em;display:block}
+.idc span{color:var(--muted);font-size:11px}
+.pill{display:inline-block;padding:2px 9px;border-radius:3px;font-size:12px;border:1px solid;white-space:nowrap;max-width:210px;overflow:hidden;text-overflow:ellipsis;vertical-align:middle}
+.pb{display:flex;align-items:center;gap:8px;min-width:120px}
+.pb .t{flex:1;height:6px;background:var(--track);border-radius:3px;overflow:hidden}
+.pb .t i{display:block;height:100%;background:var(--cyan)}
+.pb span{font:600 12px var(--head);min-width:54px}
+.pips{display:flex;gap:3px}
+.pips i{width:9px;height:14px;border-radius:2px;border:1px solid var(--amber);display:block}
+.pips i.d{background:var(--cyan);border-color:var(--cyan)}
+.pips i.n{background:var(--slate);border-color:var(--slate)}
+.gap{display:inline-block;min-width:34px;text-align:center;padding:2px 8px;border-radius:3px;font:600 12px var(--head);border:1px solid var(--line2);color:var(--green)}
+.gap.has{color:var(--amber);border-color:var(--amber);background:rgba(255,176,59,.08)}
+.ra{display:flex;gap:6px;justify-content:flex-end}
+.pager{display:flex;gap:6px;justify-content:space-between;align-items:center;margin-top:12px;flex-wrap:wrap;color:var(--muted);font-size:12px}
+.pager div{display:flex;gap:6px}
+.empty{padding:40px 12px;text-align:center;color:var(--ink2)}
+.empty b{display:block;font:600 16px var(--head);color:var(--ink);margin-bottom:6px}
+
+/* drawer */
+.scrim{position:fixed;inset:0;background:rgba(2,6,12,.7);z-index:70;opacity:0;pointer-events:none;transition:opacity .2s}
+.scrim.on{opacity:1;pointer-events:auto}
+.drawer{position:fixed;z-index:80;top:0;right:0;bottom:0;width:min(720px,100%);background:var(--bg2);border-left:1px solid var(--line2);
+  display:flex;flex-direction:column;transform:translateX(104%);transition:transform .25s cubic-bezier(.2,.7,.2,1);
+  padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);padding-right:env(safe-area-inset-right,0px)}
+.drawer.on{transform:none}
+.dh{padding:16px 20px 0;display:flex;gap:12px;justify-content:space-between;align-items:flex-start}
+.dh h2{margin:0;font:700 20px var(--head);letter-spacing:.04em}
+.dh p{margin:2px 0 0;color:var(--muted);font-size:12px}
+.dtools{display:flex;gap:12px;align-items:center;padding:12px 20px 0;flex-wrap:wrap}
+.chk{display:inline-flex;gap:8px;align-items:center;font-size:13px;color:var(--ink2);cursor:pointer}
+.chk input{accent-color:var(--cyan);width:16px;height:16px}
+.tabs{display:flex;gap:2px;overflow-x:auto;padding:12px 20px 0;border-bottom:1px solid var(--line)}
+.tab{flex:none;background:none;border:0;border-bottom:2px solid transparent;color:var(--ink2);padding:8px 12px;cursor:pointer;font:600 12px var(--head);letter-spacing:.06em;white-space:nowrap}
+.tab[aria-selected=true]{color:var(--cyan);border-bottom-color:var(--cyan)}
+.tab em{font-style:normal;margin-left:6px;background:var(--amber);color:#1A1000;border-radius:9px;padding:0 6px;font-size:11px}
+.dbody{flex:1;overflow-y:auto;padding:16px 20px 24px}
+.fgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px 16px}
+.fld{min-width:0}
+.fld.wide{grid-column:1/-1}
+.fld label{display:flex;justify-content:space-between;gap:8px;font-size:12px;color:var(--ink2);margin-bottom:4px}
+.fld label .req{color:var(--red)}
+.fld label .tag{color:var(--amber);font:600 10px var(--head);letter-spacing:.08em;text-transform:uppercase;display:none}
+.fld.is-empty label .tag{display:inline}
+.fld input,.fld select,.fld textarea{width:100%;height:38px;background:var(--panel);border:1px solid var(--line2);border-radius:2px;padding:0 10px;color:var(--ink)}
+.fld textarea{height:96px;padding:8px 10px;resize:vertical}
+.fld input:focus,.fld textarea:focus{outline:none;border-color:var(--cyan);box-shadow:0 0 0 1px var(--cyan)}
+.fld.is-empty input,.fld.is-empty textarea{border-color:var(--amber);background:rgba(255,176,59,.06)}
+.fld input[readonly]{color:var(--ink2);background:var(--bg);border-style:dashed}
+.fld.err input{border-color:var(--red)}
+.tw{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr) auto;gap:6px}
+.only-empty .fld:not(.is-empty){display:none}
+.dfoot{padding:12px 20px;border-top:1px solid var(--line);display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:var(--bg2)}
+.dfoot .sp{flex:1}
+.msg{color:var(--red);font-size:12px}
+.modal{position:fixed;inset:0;z-index:90;display:none;place-items:center;padding:16px}
+.modal.on{display:grid}
+.modal .box{max-width:440px;width:100%;--cut:14px;z-index:95}
+.modal h3{margin:0 0 8px;font:700 18px var(--head)}
+.modal p{margin:0 0 16px;color:var(--ink2)}
+.modal .row{display:flex;gap:10px;justify-content:flex-end}
+#tip{position:fixed;z-index:100;pointer-events:none;background:#020813;border:1px solid var(--line2);padding:8px 10px;font-size:12px;max-width:280px;display:none;line-height:1.4;color:var(--ink)}
+#toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%) translateY(20px);opacity:0;z-index:110;
+  background:var(--panel2);border:1px solid var(--cyan);padding:10px 16px;border-radius:2px;transition:.25s;pointer-events:none;max-width:92vw}
+#toast.on{opacity:1;transform:translateX(-50%)}
+#toast.bad{border-color:var(--red)}
+.skeleton{color:var(--muted);padding:40px 0;text-align:center}
+
+@media (max-width:1100px){.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.c7,.c5{grid-column:span 12}}
+@media (max-width:640px){
+  .kpis{grid-template-columns:minmax(0,1fr)}
+  .fgrid{grid-template-columns:minmax(0,1fr)}
+  .tw{grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto}
+  .mrow{grid-template-columns:minmax(80px,110px) minmax(0,1fr) 64px}
+  .pad{padding:16px}
+  .actions{width:100%}
+  .actions .btn{flex:1;justify-content:center}
+}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+
+<div class="wrap">
+  <header class="bar-top">
+    <div class="brand">
+      <svg width="38" height="38" viewBox="0 0 38 38" aria-hidden="true"><polygon points="19,2 34,10.5 34,27.5 19,36 4,27.5 4,10.5" fill="none" stroke="#35E0FF" stroke-width="1.6"/><path d="M10 22l9-12 9 12-9-4z" fill="#35E0FF"/></svg>
+      <div><b>FALCON TELECOM</b><small>ENF DPR command center</small></div>
+    </div>
+    <div class="search">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
+      <input id="q" type="search" autocomplete="off" placeholder="Search ENF ID, universal ID, status, supervisor, address, owner" aria-label="Search sites">
+      <kbd>/</kbd>
+    </div>
+    <div class="actions">
+      <div class="seg" role="group" aria-label="Scope">
+        <button id="scActive" aria-pressed="true" type="button">Active</button>
+        <button id="scAll" aria-pressed="false" type="button">All sites</button>
+      </div>
+      <button class="btn pri" id="btnNew" type="button">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M12 4v16M4 12h16"/></svg>New site</button>
+      <button class="btn" id="btnExport" type="button" hidden>Export .xlsx</button>
+      <span class="sync" id="sync"><i></i><span>Loading</span></span>
+    </div>
+  </header>
+
+  <section class="kpis" id="kpis" aria-label="Key figures"></section>
+
+  <section class="grid first" id="charts">
+    <div class="panel c7"><div class="pad" id="pMilestones"></div></div>
+    <div class="panel c5"><div class="pad" id="pEmpty"></div></div>
+    <div class="panel c7"><div class="pad" id="pStages"></div></div>
+    <div class="panel c5"><div class="pad" id="pStatus"></div></div>
+  </section>
+
+  <section class="panel c12" style="margin-top:16px" id="records">
+    <div class="pad">
+      <div class="ph"><h2>Site records</h2><p id="recNote"></p></div>
+      <div class="tools" id="tools"></div>
+      <div class="tw-wrap"><table>
+        <thead id="thead"></thead>
+        <tbody id="tbody"><tr><td colspan="10" class="skeleton">Loading sites</td></tr></tbody>
+      </table></div>
+      <div class="pager" id="pager"></div>
+    </div>
+  </section>
+</div>
+
+<div class="scrim" id="scrim"></div>
+<aside class="drawer" id="drawer" aria-hidden="true" aria-labelledby="dTitle">
+  <div class="dh">
+    <div><h2 id="dTitle">Site</h2><p id="dSub"></p></div>
+    <button class="btn sm" id="dClose" type="button">Close</button>
+  </div>
+  <div class="dtools">
+    <label class="chk"><input type="checkbox" id="onlyEmpty"> Show empty fields only</label>
+    <span id="dGap" class="gap"></span>
+  </div>
+  <div class="tabs" id="tabs" role="tablist"></div>
+  <div class="dbody" id="dbody"></div>
+  <div class="dfoot">
+    <button class="btn dng" id="dDelete" type="button">Delete site</button>
+    <span class="msg sp" id="dMsg" role="alert"></span>
+    <button class="btn" id="dCancel" type="button">Cancel</button>
+    <button class="btn pri" id="dSave" type="button">Save changes</button>
+  </div>
+</aside>
+
+<div class="modal" id="modal"><div class="scrim on" id="mScrim"></div>
+  <div class="panel box"><div class="pad"><h3 id="mTitle"></h3><p id="mText"></p>
+    <div class="row"><button class="btn" id="mNo" type="button">Keep it</button><button class="btn dng" id="mYes" type="button">Delete</button></div></div></div>
+</div>
+<div id="tip" role="tooltip"></div>
+<div id="toast" role="status"></div>
+<datalist id="dl-task"><option value="N/A"><option value="Done"><option value="On-hold"></datalist>
+
+<script>
+const COLS=[{"i":0,"l":"Sr #","g":"Core","k":"num"},{"i":1,"l":"ENF ID","g":"Core","k":"text"},{"i":2,"l":"Universal ID","g":"Core","k":"text"},{"i":3,"l":"FAC Folder","g":"Core","k":"task"},{"i":4,"l":"Current Status","g":"Core","k":"text"},{"i":5,"l":"Target Month","g":"Core","k":"task"},{"i":6,"l":"Region","g":"Core","k":"text"},{"i":7,"l":"Tower Height","g":"Core","k":"text"},{"i":8,"l":"MNO","g":"Core","k":"text"},{"i":9,"l":"SA / CP Supervisor","g":"Core","k":"text"},{"i":10,"l":"SAR Submitted","g":"Site Acquisition","k":"task"},{"i":11,"l":"SAR Approval / LA Goahead","g":"Site Acquisition","k":"task"},{"i":12,"l":"Rent Approval","g":"Site Acquisition","k":"task"},{"i":13,"l":"Ownership Document Shared with ENF","g":"Site Acquisition","k":"task"},{"i":14,"l":"Legal Opinion Goahead","g":"Site Acquisition","k":"task"},{"i":15,"l":"Lease Agreement","g":"Site Acquisition","k":"task"},{"i":16,"l":"LA Sumitted to ENF","g":"Site Acquisition","k":"task"},{"i":17,"l":"SA-LA SCC","g":"Site Acquisition","k":"task"},{"i":18,"l":"SA/LA Invoice Date","g":"Site Acquisition","k":"task"},{"i":19,"l":"SA-LA Invoice Amount","g":"Site Acquisition","k":"num"},{"i":20,"l":"SA-LA Sub-con PO","g":"Site Acquisition","k":"num"},{"i":21,"l":"SA-LA Sub-con paid","g":"Site Acquisition","k":"num"},{"i":22,"l":"SA-LA Sub-con payable","g":"Site Acquisition","k":"num"},{"i":23,"l":"DED Received","g":"Site Design","k":"task"},{"i":24,"l":"Soil Investigation/ SCC Report","g":"Site Design","k":"task"},{"i":25,"l":"Concrete Type (Pier / Raft Isolated)","g":"Site Design","k":"text"},{"i":26,"l":"PO Type / PR Raised Date","g":"Site Design","k":"text"},{"i":27,"l":"TMA Application Letter Received from ENF","g":"NOCs","k":"task"},{"i":28,"l":"TMA NOC Application Receiving fromTMA Date","g":"NOCs","k":"task"},{"i":29,"l":"TMA Challan Submitted to ENF","g":"NOCs","k":"task"},{"i":30,"l":"TMA Payorder Received from ENF","g":"NOCs","k":"task"},{"i":31,"l":"Payorder submission to TMA","g":"NOCs","k":"task"},{"i":32,"l":"TMA NOC Received Date","g":"NOCs","k":"task"},{"i":33,"l":"NOC SCC","g":"NOCs","k":"task"},{"i":34,"l":"NOC Invoice Date","g":"NOCs","k":"task"},{"i":35,"l":"NOC Invoice Amount","g":"NOCs","k":"num"},{"i":36,"l":"NOC Sub-con PO","g":"NOCs","k":"num"},{"i":37,"l":"NOC Sub-con paid","g":"NOCs","k":"num"},{"i":38,"l":"NOC Sub-con payable","g":"NOCs","k":"num"},{"i":39,"l":"P-CP / T-CP Application Received from ENF","g":"Commercial Power","k":"task"},{"i":40,"l":"P-CP / T-CP Submission Application Date","g":"Commercial Power","k":"task"},{"i":41,"l":"CP DN Received","g":"Commercial Power","k":"task"},{"i":42,"l":"CP Payorder Received from ENF","g":"Commercial Power","k":"task"},{"i":43,"l":"P-CP DN Submission","g":"Commercial Power","k":"task"},{"i":44,"l":"Temporary Meter Installed Date","g":"Commercial Power","k":"task"},{"i":45,"l":"TP SCC","g":"Commercial Power","k":"task"},{"i":46,"l":"TP Invoice Date","g":"Commercial Power","k":"task"},{"i":47,"l":"TP Invoice Amount","g":"Commercial Power","k":"num"},{"i":48,"l":"TP Sub-con PO","g":"Commercial Power","k":"num"},{"i":49,"l":"TP Sub-con paid","g":"Commercial Power","k":"num"},{"i":50,"l":"TP Sub-con payable","g":"Commercial Power","k":"num"},{"i":51,"l":"Permanent Meter Installed Date","g":"Commercial Power","k":"task"},{"i":52,"l":"Permanent Power Connection","g":"Commercial Power","k":"task"},{"i":53,"l":"CP SCC","g":"Commercial Power","k":"task"},{"i":54,"l":"CP Invoice Date","g":"Commercial Power","k":"task"},{"i":55,"l":"CP Invoice Amount","g":"Commercial Power","k":"num"},{"i":56,"l":"PCP Sub-con PO","g":"Commercial Power","k":"num"},{"i":57,"l":"PCP Sub-con paid","g":"Commercial Power","k":"num"},{"i":58,"l":"PCP Sub-con payable","g":"Commercial Power","k":"num"},{"i":59,"l":"Mobilization SCC","g":"Mobilization","k":"task"},{"i":60,"l":"30% Invoice on Mobilization Date","g":"Mobilization","k":"task"},{"i":61,"l":"Mobilization Invoice Amount","g":"Mobilization","k":"num"},{"i":62,"l":"Contractor's Name","g":"Mobilization","k":"text"},{"i":63,"l":"Mobilization payable to Sub-con","g":"Mobilization","k":"calc"},{"i":64,"l":"CW Mobilize","g":"Mobilization","k":"task"},{"i":65,"l":"Kick Off","g":"Foundations","k":"task"},{"i":66,"l":"Excavation","g":"Foundations","k":"task"},{"i":67,"l":"Lean","g":"Foundations","k":"task"},{"i":68,"l":"Steel Fixing","g":"Foundations","k":"task"},{"i":69,"l":"Raft Pouring","g":"Foundations","k":"task"},{"i":70,"l":"Column Pouring","g":"Foundations","k":"task"},{"i":71,"l":"ODU / DG Pads","g":"Foundations","k":"task"},{"i":72,"l":"Solar Raft","g":"Foundations","k":"task"},{"i":73,"l":"Solar Foundation","g":"Foundations","k":"task"},{"i":74,"l":"ATW Pouring","g":"Foundations","k":"task"},{"i":75,"l":"Foundaitons SCC Date","g":"Foundations","k":"task"},{"i":76,"l":"30% Invoice on Foundation Date","g":"Foundations","k":"task"},{"i":77,"l":"Foundation Invoice Amount","g":"Foundations","k":"num"},{"i":78,"l":"Foundation payable to Sub-con","g":"Foundations","k":"calc"},{"i":79,"l":"Steel / Concrete Test Report","g":"Foundations","k":"task"},{"i":80,"l":"Tower Ready for Delivery","g":"Tower & Shed","k":"task"},{"i":81,"l":"Tower Pickup Date","g":"Tower & Shed","k":"task"},{"i":82,"l":"Tower Errection","g":"Tower & Shed","k":"task"},{"i":83,"l":"ODU Shed/ Solar Structure","g":"Tower & Shed","k":"task"},{"i":84,"l":"Boundary Wall lean","g":"Tower & Shed","k":"task"},{"i":85,"l":"Boundary Wall /Fence","g":"Tower & Shed","k":"task"},{"i":86,"l":"Earthing Work","g":"Tower & Shed","k":"task"},{"i":87,"l":"Compund Backfilling with Gravel","g":"Tower & Shed","k":"task"},{"i":88,"l":"RFIA","g":"RFIA","k":"task"},{"i":89,"l":"Payorder Submission to TMA","g":"RFIA","k":"task"},{"i":90,"l":"TSSC/ HSE Complaince/ RFI W.O Complete","g":"RFIA","k":"task"},{"i":91,"l":"RFIA SCC","g":"RFIA","k":"task"},{"i":92,"l":"20% Invoice on RFIA Date","g":"RFIA","k":"task"},{"i":93,"l":"RFI Invoice Amount","g":"RFIA","k":"num"},{"i":94,"l":"RFI payable to Sub-con","g":"RFIA","k":"calc"},{"i":95,"l":"HSE Plates/ CST & STR","g":"RFIA","k":"num"},{"i":96,"l":"Site completion to Sub-con","g":"RFIA","k":"calc"},{"i":97,"l":"Differential Invoice SCC","g":"RFIA","k":"task"},{"i":98,"l":"Differential Invoice Date","g":"RFIA","k":"task"},{"i":99,"l":"Differential Invoice Amount","g":"RFIA","k":"num"},{"i":100,"l":"PAT","g":"Acceptance","k":"task"},{"i":101,"l":"PAC (SCC)","g":"Acceptance","k":"task"},{"i":102,"l":"10% Invoice on PAC Date","g":"Acceptance","k":"task"},{"i":103,"l":"PAC Invoice Amount","g":"Acceptance","k":"num"},{"i":104,"l":"PAC payable to Sub-con","g":"Acceptance","k":"calc"},{"i":105,"l":"FAT","g":"Acceptance","k":"task"},{"i":106,"l":"FAC (SCC)","g":"Acceptance","k":"task"},{"i":107,"l":"10% Invoice on FAC Date","g":"Acceptance","k":"task"},{"i":108,"l":"FAC Invoice Amount","g":"Acceptance","k":"num"},{"i":109,"l":"FAC payable to Sub-con","g":"Acceptance","k":"calc"},{"i":110,"l":"Hard Area Access Track (KMs)","g":"Site & Access","k":"num"},{"i":111,"l":"Shifting (Double / Triple)","g":"Site & Access","k":"text"},{"i":112,"l":"De-Watering","g":"Site & Access","k":"text"},{"i":113,"l":"Hard Rock","g":"Site & Access","k":"text"},{"i":114,"l":"Site Address","g":"Site & Access","k":"text"},{"i":115,"l":"Latitude","g":"Site & Access","k":"num"},{"i":116,"l":"Longitude","g":"Site & Access","k":"num"},{"i":117,"l":"Owner's Name","g":"Site & Access","k":"text"},{"i":118,"l":"Owner Cell #","g":"Site & Access","k":"text"},{"i":119,"l":"Remarks","g":"Site & Access","k":"long"},{"i":120,"l":"CME PR Raise Date","g":"Commercial","k":"date"},{"i":121,"l":"CME PR Approval Date","g":"Commercial","k":"date"},{"i":122,"l":"CME PO amount as per Invoice tracker","g":"Commercial","k":"num"},{"i":123,"l":"CME PO Amount (W/o GST)","g":"Commercial","k":"num"},{"i":124,"l":"CME PO (Diff) Amount (W/o GST)","g":"Commercial","k":"num"},{"i":125,"l":"CME PO (Revision) Amount (W/o GST)","g":"Commercial","k":"num"},{"i":126,"l":"Total CME PO","g":"Commercial","k":"calc"},{"i":127,"l":"SA/LA PO amount","g":"Commercial","k":"num"},{"i":128,"l":"NOC PO amount","g":"Commercial","k":"num"},{"i":129,"l":"TCP PO amount","g":"Commercial","k":"num"},{"i":130,"l":"PCP PO amount","g":"Commercial","k":"num"},{"i":131,"l":"Additional Power Cable Invoice Amount","g":"Commercial","k":"num"},{"i":132,"l":"Additional PO Invoice Amount","g":"Commercial","k":"num"},{"i":133,"l":"CME Revision PO Invoice Amount","g":"Commercial","k":"num"},{"i":134,"l":"Differential PO Invoice Amount","g":"Commercial","k":"num"},{"i":135,"l":"Special Carriage Invoice Amount","g":"Commercial","k":"num"},{"i":136,"l":"Total Site Invoice Amount","g":"Commercial","k":"calc"},{"i":137,"l":"Total PO amount of CME Sub-con","g":"Commercial","k":"num"},{"i":138,"l":"Total paid amount of CME Sub-con","g":"Commercial","k":"calc"},{"i":139,"l":"Total payable amount of CME Sub-con","g":"Commercial","k":"calc"},{"i":140,"l":"Received - Paid","g":"Commercial","k":"calc"},{"i":141,"l":"Special Carriage Invoice Amount","g":"Commercial","k":"num"}];
+const GROUPS=['Core','Site Acquisition','Site Design','NOCs','Commercial Power','Mobilization','Foundations','Tower & Shed','RFIA','Acceptance','Site & Access','Commercial'];
+const MS=[[11,'SAR approval'],[15,'Lease agreement'],[32,'TMA NOC received'],[52,'Permanent power'],[59,'Mobilization SCC'],[75,'Foundation SCC'],[82,'Tower erection'],[88,'RFIA'],[101,'PAC'],[106,'FAC']];
+const CORE_TRACK=[1,2,3,4,5,6,7,8,9,114,115,116];
+const TASKS=COLS.filter(c=>c.k==='task'&&c.i>=10&&c.i<=109).map(c=>c.i);
+const TRACK=CORE_TRACK.concat(TASKS);
+const TRACKSET=new Set(TRACK);
+const STAGES=['Site Acquisition','Site Design','NOCs','Commercial Power','Mobilization','Foundations','Tower & Shed','RFIA','Acceptance'];
+const BUCKETS=[['Accepted','#3DDC97'],['Construction & handover','#35E0FF'],['Early stage','#8B7BFF'],['Partial scope','#E26BFF'],['Descoped','#62799C']];
+const BCOL=Object.fromEntries(BUCKETS);
+const SEARCH_COLS=[1,2,4,6,8,9,62,114,117,118,119];
+const ISO=/^\d{4}-\d{2}-\d{2}$/;
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmt=n=>Number(n).toLocaleString('en-US');
+const colOf=i=>COLS[i];
+
+let BASE=[], overlay=new Map(), dbc=null, mode='loading', firstPaint=true;
+const view={scope:'active',q:'',bucket:'all',region:'all',mno:'all',gaps:false,missing:null,deleted:false,sort:{k:'sr',d:1},page:1};
+const PAGE=15;
+let ed=null; // editor state
+
+/* ---------- classification ---------- */
+const isEmpty=v=>v==null||v==='';
+function cellState(v){
+  if(isEmpty(v)) return 'p';
+  if(typeof v==='string'){
+    const s=v.trim().toLowerCase();
+    if(/^(n\/?a|na|-|not possible|noc not possible|descoped)$/.test(s)) return 'n';
+    if(/^(on-?\s?hold|rejected|pending|awaited)$/.test(s)) return 'p';
+  }
+  return 'd';
+}
+function bucketOf(s){
+  s=String(s||'').toLowerCase();
+  if(!s) return 'Early stage';
+  if(/de-?scoped/.test(s)&&!/cme\s*de-?scoped/.test(s)&&!/only/.test(s)) return 'Descoped';
+  if(s==='fac') return 'Accepted';
+  if(/only|cme\s*de-?scoped/.test(s)) return 'Partial scope';
+  if(/sar|lease|pr awaited|^la$|jv|hold/.test(s)) return 'Early stage';
+  return 'Construction & handover';
+}
+function analyze(r){
+  let d=0,n=0,p=0; for(const i of TASKS){const s=cellState(r[i]); s==='d'?d++:s==='n'?n++:p++;}
+  const empty=TRACK.filter(i=>isEmpty(r[i]));
+  const ms=MS.map(([i])=>cellState(r[i]));
+  const st={}; // per stage
+  for(const i of TASKS){const g=colOf(i).g; const s=cellState(r[i]); (st[g]=st[g]||{d:0,n:0,p:0})[s]++;}
+  return {d,n,p,empty,ms,st,bucket:bucketOf(r[4])};
+}
+
+/* ---------- data ---------- */
+function allRecords(){
+  const out=[];
+  for(const b of BASE){
+    const key='s'+b['0']; const o=overlay.get(key);
+    out.push({key,sr:b['0'],rec:(o&&o.rec)||b,deleted:!!(o&&o.deleted),isNew:false});
+  }
+  for(const [key,o] of overlay) if(key[0]==='n') out.push({key,sr:(o.rec&&o.rec['0'])||0,rec:o.rec||{},deleted:!!o.deleted,isNew:true});
+  for(const x of out){x.a=analyze(x.rec); x.hay=SEARCH_COLS.map(i=>x.rec[i]??'').join(' ').toLowerCase();}
+  return out;
+}
+let REC=[];
+const inScope=x=>!x.deleted&&(view.scope==='all'||x.a.bucket!=='Descoped');
+
+/* ---------- persistence: shared db overlay, local fallback ---------- */
+async function initStore(){
+  try{
+    const db=await claude.use('db');
+    if(db){
+      dbc=db.collection('sites'); mode='live'; setSync();
+      dbc.onSnapshot(snap=>{overlay=new Map(snap.docs.map(d=>[d.id,d.data()])); refresh();},
+        ()=>{mode='local'; loadLocal(); setSync(); refresh();});
+      return;
+    }
+  }catch(e){}
+  mode='local'; loadLocal(); setSync();
+}
+function loadLocal(){try{const t=localStorage.getItem('falcon-dpr-overlay'); if(t) overlay=new Map(Object.entries(JSON.parse(t)));}catch(e){}}
+function saveLocal(){try{localStorage.setItem('falcon-dpr-overlay',JSON.stringify(Object.fromEntries(overlay)));}catch(e){}}
+function setSync(){
+  const el=$('#sync'); el.className='sync '+(mode==='live'?'live':mode==='local'?'local':'');
+  el.lastChild.textContent=mode==='live'?'Shared and saved':mode==='local'?'Saved in this browser only':'Loading';
+}
+async function commit(key,doc){
+  const prev=overlay.get(key);
+  if(doc===null) overlay.delete(key); else overlay.set(key,doc);
+  refresh();
+  if(mode==='live'){
+    try{ doc===null? await dbc.doc(key).delete() : await dbc.doc(key).set(doc); }
+    catch(e){ prev?overlay.set(key,prev):overlay.delete(key); refresh(); toast('You can view this dashboard but not change it.',true); return false; }
+  } else saveLocal();
+  return true;
+}
+
+/* ---------- render ---------- */
+function refresh(){ REC=allRecords(); renderKpis(); renderCharts(); renderTools(); renderTable(); firstPaint=false; $('#charts').classList.remove('first'); }
+const scoped=()=>REC.filter(inScope);
+
+function ring(pct,color){
+  const R=34,C=2*Math.PI*R,off=C*(1-Math.min(1,pct));
+  return `<div class="ring"><svg width="84" height="84" viewBox="0 0 84 84"><circle class="t" cx="42" cy="42" r="${R}"/><circle class="v" cx="42" cy="42" r="${R}" stroke="${color}" stroke-dasharray="${C}" stroke-dashoffset="${off}"/></svg><b>${Math.round(pct*100)}%</b></div>`;
+}
+function renderKpis(){
+  const S=scoped(), total=REC.filter(x=>!x.deleted).length, desc=REC.filter(x=>!x.deleted&&x.a.bucket==='Descoped').length;
+  let d=0,n=0,p=0,md=0,mApp=0,fac=0,eTot=0,eSites=0;
+  for(const x of S){d+=x.a.d;n+=x.a.n;p+=x.a.p; x.a.ms.forEach(s=>{if(s==='d')md++; if(s!=='n')mApp++;}); if(x.a.bucket==='Accepted')fac++; eTot+=x.a.empty.length; if(x.a.empty.length)eSites++;}
+  const tp=d+p?d/(d+p):0, mp=mApp?md/mApp:0;
+  $('#kpis').innerHTML=`
+  <div class="panel kpi"><div class="pad"><div><h3>Sites</h3><div class="big">${fmt(S.length)}<small> ${view.scope==='active'?'active':'in view'}</small></div>
+    <div class="sub">${fmt(fac)} accepted (FAC) · ${fmt(desc)} descoped · ${fmt(total)} total</div></div>${ring(S.length?fac/S.length:0,'var(--green)')}</div></div>
+  <div class="panel kpi"><div class="pad"><div><h3>Tasks complete</h3><div class="big">${fmt(d)}<small> / ${fmt(d+p)}</small></div>
+    <div class="sub">${fmt(p)} open · ${fmt(n)} not applicable</div></div>${ring(tp,'var(--cyan)')}</div></div>
+  <div class="panel kpi"><div class="pad"><div><h3>Milestones reached</h3><div class="big">${fmt(md)}<small> / ${fmt(mApp)}</small></div>
+    <div class="sub">${MS.length} gates per site, N/A excluded</div></div>${ring(mp,'var(--violet)')}</div></div>
+  <div class="panel kpi click" id="kGap" tabindex="0" role="button" aria-label="Show sites with empty fields"><div class="pad"><div><h3>Empty fields</h3><div class="big" style="color:var(--amber)">${fmt(eTot)}</div>
+    <div class="sub">in ${fmt(eSites)} sites · ring shows share of ${fmt(TRACK.length)} tracked fields</div></div>${ring(S.length?eTot/(S.length*TRACK.length):0,'var(--amber)')}</div></div>`;
+  const k=$('#kGap'); const go=()=>{view.gaps=true;view.page=1;view.sort={k:'gaps',d:-1};refresh();$('#records').scrollIntoView({behavior:'smooth',block:'start'});};
+  k.onclick=go; k.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();go();}};
+}
+function renderCharts(){
+  const S=scoped(), N=S.length||1;
+  const legend3=`<div class="legend"><span><i class="d"></i>Done</span><span><i class="n"></i>Not applicable</span><span><i class="p"></i>Open</span></div>`;
+  // milestones
+  const rows=MS.map(([i,nm],j)=>{
+    let d=0,n=0,p=0; for(const x of S){const s=x.a.ms[j]; s==='d'?d++:s==='n'?n++:p++;}
+    const tip=`${esc(colOf(i).l)}: ${d} done, ${n} not applicable, ${p} open`;
+    return `<div class="mrow" data-tip="${tip}"><span class="mlabel">${esc(nm)}</span>
+      <div class="bar">${d?`<i class="d" style="width:${d/N*100}%"></i>`:''}${n?`<i class="n" style="width:${n/N*100}%"></i>`:''}${p?`<i class="p" style="width:${p/N*100}%"></i>`:''}</div>
+      <span class="mval">${fmt(d)}<small>/${fmt(S.length)}</small></span></div>`;}).join('');
+  $('#pMilestones').innerHTML=`<div class="ph"><h2>Milestone pipeline</h2><p>${MS.length} gates, ${fmt(S.length)} sites</p></div>${legend3}${rows}`;
+  // stages
+  const cols=STAGES.map(g=>{
+    let d=0,n=0,p=0; for(const x of S){const s=x.a.st[g]; if(s){d+=s.d;n+=s.n;p+=s.p;}}
+    const pct=d+p?d/(d+p):0;
+    return `<div class="col" data-tip="${esc(g)}: ${fmt(d)} done, ${fmt(p)} open, ${fmt(n)} not applicable">
+      <span class="pct">${Math.round(pct*100)}%</span><div class="trk"><i style="height:${pct*100}%"></i></div><span class="nm">${esc(g)}</span></div>`;}).join('');
+  $('#pStages').innerHTML=`<div class="ph"><h2>Tasks by stage</h2><p>${fmt(TASKS.length)} workflow tasks per site</p></div>
+    <div class="legend"><span><i class="d"></i>Done</span><span><i class="p"></i>Open</span><span style="color:var(--muted)">Not applicable tasks are left out</span></div><div class="cols">${cols}</div>`;
+  // empty fields
+  const cnt=new Map(); for(const x of S) for(const i of x.a.empty) cnt.set(i,(cnt.get(i)||0)+1);
+  const top=[...cnt].sort((a,b)=>b[1]-a[1]).slice(0,10);
+  $('#pEmpty').innerHTML=`<div class="ph"><h2>Most empty fields</h2><p>select one to list the sites</p></div>`+
+    (top.length?top.map(([i,c])=>`<button class="erow" type="button" data-miss="${i}" data-tip="${c} of ${S.length} sites have no value">
+      <span class="en">${esc(colOf(i).l)}<em>${esc(colOf(i).g)}</em></span><span class="ev">${fmt(c)}</span><span class="eb"><i style="width:${c/N*100}%"></i></span></button>`).join('')
+    :`<div class="empty"><b>No empty fields</b>Every tracked field has a value.</div>`);
+  // status
+  const bc=Object.fromEntries(BUCKETS.map(([b])=>[b,0])); for(const x of REC.filter(x=>!x.deleted&&(view.scope==='all'||x.a.bucket!=='Descoped'))) bc[x.a.bucket]++;
+  const tot=Object.values(bc).reduce((a,b)=>a+b,0)||1;
+  const reg={}; for(const x of S){const r=x.rec[6]||'Unknown'; reg[r]=(reg[r]||0)+1;}
+  $('#pStatus').innerHTML=`<div class="ph"><h2>Portfolio status</h2><p>${fmt(tot)} sites</p></div>
+    <div class="stack">${BUCKETS.filter(([b])=>bc[b]).map(([b,c])=>`<i style="width:${bc[b]/tot*100}%;background:${c}" data-tip="${b}: ${bc[b]}"></i>`).join('')}</div>
+    <div class="blist">${BUCKETS.filter(([b])=>bc[b]).map(([b,c])=>`<button class="brow" type="button" data-bucket="${b}"><i style="background:${c}"></i><span>${b}</span><b>${fmt(bc[b])}</b></button>`).join('')}</div>
+    <div class="chips">${Object.entries(reg).sort((a,b)=>b[1]-a[1]).map(([r,c])=>`<button class="chip" type="button" data-region="${esc(r)}">${esc(r)} <b>${c}</b></button>`).join('')}</div>`;
+}
+function renderTools(){
+  const S=REC.filter(x=>!x.deleted);
+  const regions=[...new Set(S.map(x=>x.rec[6]).filter(Boolean))].sort();
+  const mnos=[...new Set(S.map(x=>String(x.rec[8]||'').trim().toLowerCase()).filter(Boolean))].sort();
+  const delN=REC.filter(x=>x.deleted).length;
+  const opt=(v,l,cur)=>`<option value="${esc(v)}"${v===cur?' selected':''}>${esc(l)}</option>`;
+  const mcol=colOf(view.missing)?.l;
+  $('#tools').innerHTML=`
+    <select class="sel" id="fBucket" aria-label="Status group">${opt('all','All statuses',view.bucket)}${BUCKETS.map(([b])=>opt(b,b,view.bucket)).join('')}</select>
+    <select class="sel" id="fRegion" aria-label="Region">${opt('all','All regions',view.region)}${regions.map(r=>opt(r,r,view.region)).join('')}</select>
+    <select class="sel" id="fMno" aria-label="Operator">${opt('all','All operators',view.mno)}${mnos.map(m=>opt(m,m.charAt(0).toUpperCase()+m.slice(1),view.mno)).join('')}</select>
+    <button class="chip${view.gaps?'':''}" type="button" id="fGaps" aria-pressed="${view.gaps}">Has empty fields</button>
+    ${view.missing!=null?`<button class="chip amber" type="button" id="fMiss">Missing: ${esc(mcol)} &times;</button>`:''}
+    ${delN?`<button class="chip" type="button" id="fDel" aria-pressed="${view.deleted}">Deleted <b>${delN}</b></button>`:''}
+    <span class="count" id="count"></span>`;
+  $('#fBucket').onchange=e=>{view.bucket=e.target.value;view.page=1;renderTable();};
+  $('#fRegion').onchange=e=>{view.region=e.target.value;view.page=1;renderTable();};
+  $('#fMno').onchange=e=>{view.mno=e.target.value;view.page=1;renderTable();};
+  $('#fGaps').onclick=()=>{view.gaps=!view.gaps;view.page=1;renderTools();renderTable();};
+  const fm=$('#fMiss'); if(fm) fm.onclick=()=>{view.missing=null;view.page=1;renderTools();renderTable();};
+  const fd=$('#fDel'); if(fd) fd.onclick=()=>{view.deleted=!view.deleted;view.page=1;renderTools();renderTable();};
+}
+const HEAD=[['sr','Site'],['uid','Universal ID'],['status','Status'],['region','Region'],['mno','Operator'],['sup','Supervisor'],['tasks','Tasks'],['ms','Milestones'],['gaps','Empty'],['','']];
+function sortVal(x,k){const r=x.rec; switch(k){
+  case 'sr':return Number(r[0])||0; case 'uid':return String(r[2]??''); case 'status':return String(r[4]??''); case 'region':return String(r[6]??'');
+  case 'mno':return String(r[8]??'').toLowerCase(); case 'sup':return String(r[9]??'');
+  case 'tasks':return x.a.d+x.a.p?x.a.d/(x.a.d+x.a.p):0; case 'ms':return x.a.ms.filter(s=>s==='d').length; case 'gaps':return x.a.empty.length;}return 0;}
+function filtered(){
+  const toks=view.q.toLowerCase().split(/\s+/).filter(Boolean);
+  return REC.filter(x=>{
+    if(view.deleted!==x.deleted) return false;
+    if(!x.deleted&&view.scope==='active'&&x.a.bucket==='Descoped'&&view.bucket!=='Descoped') return false;
+    if(view.bucket!=='all'&&x.a.bucket!==view.bucket) return false;
+    if(view.region!=='all'&&x.rec[6]!==view.region) return false;
+    if(view.mno!=='all'&&String(x.rec[8]||'').trim().toLowerCase()!==view.mno) return false;
+    if(view.gaps&&!x.a.empty.length) return false;
+    if(view.missing!=null&&!x.a.empty.includes(view.missing)) return false;
+    return toks.every(t=>x.hay.includes(t));
+  });
+}
+function renderTable(){
+  const list=filtered(), {k,d}=view.sort;
+  list.sort((a,b)=>{const A=sortVal(a,k),B=sortVal(b,k); const c=typeof A==='number'?A-B:String(A).localeCompare(String(B),undefined,{numeric:true}); return (c||sortVal(a,'sr')-sortVal(b,'sr'))*d;});
+  const pages=Math.max(1,Math.ceil(list.length/PAGE)); view.page=Math.min(view.page,pages);
+  const slice=list.slice((view.page-1)*PAGE,view.page*PAGE);
+  $('#thead').innerHTML='<tr>'+HEAD.map(([key,l])=>key?`<th ${k===key?`aria-sort="${d>0?'ascending':'descending'}"`:''}><button type="button" data-sort="${key}">${l}${k===key?(d>0?' ▲':' ▼'):''}</button></th>`:'<th></th>').join('')+'</tr>';
+  const idDup={}; for(const x of REC) if(!x.deleted){const v=x.rec[1]; if(v&&!/^n\/?a$/i.test(v)) idDup[v]=(idDup[v]||0)+1;}
+  $('#tbody').innerHTML=slice.length?slice.map(x=>{
+    const r=x.rec,a=x.a,tp=a.d+a.p?a.d/(a.d+a.p):0,mc=a.ms.filter(s=>s==='d').length;
+    const nxt=MS.find((m,j)=>a.ms[j]==='p');
+    const missing=a.empty.slice(0,8).map(i=>colOf(i).l).join(', ')+(a.empty.length>8?` and ${a.empty.length-8} more`:'');
+    const dup=idDup[r[1]]>1?` <span class="pill" style="color:var(--red);border-color:var(--red)" data-tip="Another site uses this ENF ID">duplicate ID</span>`:'';
+    return `<tr data-key="${x.key}" class="${x.deleted?'del':''}" tabindex="0">
+      <td class="idc"><b>${esc(r[1]||'No ENF ID')}</b><span>Sr ${esc(r[0]??'new')}${x.isNew?' · new':''}</span>${dup}</td>
+      <td>${esc(r[2]??'')}</td>
+      <td><span class="pill" style="color:${BCOL[a.bucket]};border-color:${BCOL[a.bucket]}55" data-tip="${esc(r[4]||'')}">${esc(r[4]||'No status')}</span></td>
+      <td>${esc(r[6]??'')}</td><td>${esc(r[8]??'')}</td><td>${esc(r[9]??'')}</td>
+      <td><div class="pb" data-tip="${a.d} done, ${a.p} open, ${a.n} not applicable"><div class="t"><i style="width:${tp*100}%"></i></div><span>${a.d}/${a.d+a.p}</span></div></td>
+      <td><div class="pips" data-tip="${mc} of ${MS.length} milestones${nxt?` · next: ${nxt[1]}`:''}">${a.ms.map(s=>`<i class="${s}"></i>`).join('')}</div></td>
+      <td><span class="gap${a.empty.length?' has':''}" ${a.empty.length?`data-tip="Missing: ${esc(missing)}"`:''}>${a.empty.length}</span></td>
+      <td><div class="ra">${x.deleted?`<button class="btn sm" type="button" data-restore="${x.key}">Restore</button>`
+        :`<button class="btn sm" type="button" data-edit="${x.key}">Edit</button><button class="btn sm dng" type="button" data-del="${x.key}">Delete</button>`}</div></td></tr>`;}).join('')
+    :`<tr><td colspan="10"><div class="empty"><b>${view.deleted?'No deleted sites':'No sites match'}</b>${view.deleted?'Deleted sites appear here so you can restore them.':'Change the search or filters, or '}${view.deleted?'':'<button class="chip" type="button" id="clr">clear everything</button>'}</div></td></tr>`;
+  const from=list.length?(view.page-1)*PAGE+1:0, to=Math.min(list.length,view.page*PAGE);
+  $('#count').textContent=`${fmt(list.length)} sites`;
+  $('#recNote').textContent=view.deleted?'Showing deleted sites':'Select a row to edit';
+  $('#pager').innerHTML=`<span>Showing ${from}–${to} of ${fmt(list.length)}</span><div><button class="btn sm" id="pp" type="button" ${view.page<=1?'disabled':''}>Previous</button><span style="align-self:center">Page ${view.page} of ${pages}</span><button class="btn sm" id="pn" type="button" ${view.page>=pages?'disabled':''}>Next</button></div>`;
+  $('#pp').onclick=()=>{view.page--;renderTable();}; $('#pn').onclick=()=>{view.page++;renderTable();};
+  const c=$('#clr'); if(c) c.onclick=()=>{Object.assign(view,{q:'',bucket:'all',region:'all',mno:'all',gaps:false,missing:null,page:1});$('#q').value='';renderTools();renderTable();};
+}
+
+/* ---------- editor ---------- */
+function fieldHTML(c,v){
+  const id='f'+c.i, req=[1,4,6].includes(c.i)?'<span class="req" aria-hidden="true"> *</span>':'', tag='<span class="tag">empty</span>';
+  const lab=`<label for="${id}"><span>${esc(c.l)}${req}</span>${tag}</label>`;
+  const wide=c.k==='long'?' wide':'';
+  let inner;
+  if(c.k==='calc') inner=`<input id="${id}" readonly value="${v==null?'':esc(fmt(v))}" placeholder="calculated">`;
+  else if(c.k==='num') inner=`<input id="${id}" type="number" step="any" value="${esc(v??'')}"${c.i===0?' readonly':''}>`;
+  else if(c.k==='long') inner=`<textarea id="${id}">${esc(v??'')}</textarea>`;
+  else if(c.k==='task'||c.k==='date'){
+    const isD=typeof v==='string'&&ISO.test(v);
+    inner=`<div class="tw"><input id="${id}" type="date" value="${isD?v:''}" aria-label="${esc(c.l)} date"><input id="${id}t" type="text" list="dl-task" value="${!isD&&v!=null?esc(v):''}" placeholder="or N/A, Done" aria-label="${esc(c.l)} status"><button type="button" class="btn sm" data-na="${c.i}">N/A</button></div>`;
+  } else inner=`<input id="${id}" type="text" value="${esc(v??'')}" ${DL.has(c.i)?`list="dl${c.i}"`:''}>`;
+  return `<div class="fld${wide}" data-i="${c.i}">${lab}${inner}</div>`;
+}
+let DL=new Set();
+function datalists(){
+  let h=''; const ids=[4,6,7,8,9,25,26,62,111,112,113];
+  for(const i of ids){const vals=[...new Set(BASE.map(b=>b[i]).filter(v=>typeof v==='string'))].sort(); if(vals.length&&vals.length<=60){DL.add(i);h+=`<datalist id="dl${i}">${vals.map(v=>`<option value="${esc(v)}">`).join('')}</datalist>`;}}
+  document.body.insertAdjacentHTML('beforeend',h);
+}
+function openEditor(key){
+  const x=key?REC.find(r=>r.key===key):null;
+  const rec=x?JSON.parse(JSON.stringify(x.rec)):{'0':Math.max(0,...REC.map(r=>Number(r.rec[0])||0))+1};
+  ed={key:key||('n'+Date.now()),isNew:!x,draft:rec,tab:'Core'};
+  $('#dTitle').textContent=x?(rec[1]||'Site'):'New site';
+  $('#dSub').textContent=x?`Sr ${rec[0]} · ${rec[4]||'No status'}`:`Sr ${rec[0]} · fill in the amber fields to complete the record`;
+  $('#dDelete').style.display=x?'':'none';
+  $('#dMsg').textContent=''; $('#onlyEmpty').checked=false; $('#dbody').classList.remove('only-empty');
+  $('#tabs').innerHTML=GROUPS.map(g=>`<button class="tab" role="tab" type="button" data-tab="${esc(g)}" aria-selected="${g==='Core'}">${esc(g)}<em hidden></em></button>`).join('');
+  $('#dbody').innerHTML=GROUPS.map(g=>`<div class="fgrid" data-g="${esc(g)}" ${g==='Core'?'':'hidden'}>${COLS.filter(c=>c.g===g).map(c=>fieldHTML(c,rec[c.i])).join('')}</div>`).join('');
+  markEmpty();
+  $('#scrim').classList.add('on'); $('#drawer').classList.add('on'); $('#drawer').setAttribute('aria-hidden','false');
+  setTimeout(()=>$('#f1')&&$('#f1').focus(),260);
+}
+function closeEditor(){ed=null;$('#scrim').classList.remove('on');$('#drawer').classList.remove('on');$('#drawer').setAttribute('aria-hidden','true');}
+function markEmpty(){
+  const per={}; let tot=0;
+  document.querySelectorAll('#dbody .fld').forEach(f=>{
+    const i=+f.dataset.i, e=TRACKSET.has(i)&&isEmpty(ed.draft[i]);
+    f.classList.toggle('is-empty',e); if(e){tot++;per[colOf(i).g]=(per[colOf(i).g]||0)+1;}
+  });
+  document.querySelectorAll('#tabs .tab').forEach(t=>{const em=t.querySelector('em'),c=per[t.dataset.tab]||0; em.hidden=!c; em.textContent=c;});
+  const g=$('#dGap'); g.textContent=`${tot} empty`; g.className='gap'+(tot?' has':'');
+}
+function setVal(i,v){ if(isEmpty(v)) delete ed.draft[i]; else ed.draft[i]=v; }
+function onField(e){
+  const t=e.target, f=t.closest('.fld'); if(!f||!ed) return; const i=+f.dataset.i, c=colOf(i);
+  if(c.k==='task'||c.k==='date'){
+    const dI=f.querySelector('input[type=date]'), tI=f.querySelector('input[type=text]');
+    if(t===dI){ tI.value=''; setVal(i,dI.value); }
+    else if(t===tI){ const v=tI.value.trim(); if(ISO.test(v)){dI.value=v;tI.value='';} else dI.value=''; setVal(i,v); }
+  } else if(c.k==='num') setVal(i,t.value===''?null:Number(t.value));
+  else setVal(i,t.value.trim());
+  f.classList.remove('err'); markEmpty();
+}
+function saveEditor(){
+  const d=ed.draft, msg=$('#dMsg'); document.querySelectorAll('.fld.err').forEach(f=>f.classList.remove('err'));
+  const bad=[]; for(const i of [1,4,6]) if(isEmpty(d[i])) bad.push(i);
+  const lat=d[115],lng=d[116]; if(lat!=null&&(typeof lat!=='number'||lat<-90||lat>90)) bad.push(115); if(lng!=null&&(typeof lng!=='number'||lng<-180||lng>180)) bad.push(116);
+  if(bad.length){
+    bad.forEach(i=>document.querySelector(`.fld[data-i="${i}"]`).classList.add('err'));
+    const first=colOf(bad[0]); msg.textContent=[115,116].includes(bad[0])?`${first.l} must be a valid coordinate.`:`${bad.map(i=>colOf(i).l).join(', ')} required.`;
+    showTab(first.g); return;
+  }
+  const dup=REC.some(r=>!r.deleted&&r.key!==ed.key&&r.rec[1]===d[1]&&!/^n\/?a$/i.test(d[1]));
+  const clean={}; for(const [k,v] of Object.entries(d)) if(!isEmpty(v)) clean[k]=v;
+  const prev=overlay.get(ed.key);
+  const name=d[1]; const wasNew=ed.isNew;
+  commit(ed.key,{key:ed.key,rec:clean,deleted:false,ts:new Date().toISOString()}).then(ok=>{ if(ok) toast(`${wasNew?'Added':'Saved'} ${name}${dup?' · another site already uses this ENF ID':''}`); });
+  closeEditor();
+}
+function showTab(g){
+  ed.tab=g; document.querySelectorAll('#tabs .tab').forEach(t=>t.setAttribute('aria-selected',t.dataset.tab===g));
+  document.querySelectorAll('#dbody .fgrid').forEach(p=>p.hidden=p.dataset.g!==g);
+  $('#dbody').scrollTop=0;
+}
+function askDelete(key){
+  const x=REC.find(r=>r.key===key); if(!x) return;
+  $('#mTitle').textContent=`Delete ${x.rec[1]||'this site'}?`;
+  $('#mText').textContent='The site leaves the dashboard counts and table. You can bring it back from the Deleted list.';
+  $('#modal').classList.add('on');
+  $('#mNo').onclick=()=>$('#modal').classList.remove('on'); $('#mScrim').onclick=$('#mNo').onclick;
+  $('#mYes').onclick=async()=>{
+    $('#modal').classList.remove('on'); closeEditor();
+    const o=overlay.get(key);
+    const ok=await commit(key,{key,rec:(o&&o.rec)||x.rec,deleted:true,ts:new Date().toISOString()});
+    if(ok) toast(`Deleted ${x.rec[1]||'site'}`);
+  };
+  $('#mYes').focus();
+}
+async function restore(key){
+  const x=REC.find(r=>r.key===key); const o=overlay.get(key); if(!x||!o) return;
+  const ok=await commit(key,{...o,deleted:false}); if(ok) toast(`Restored ${x.rec[1]||'site'}`);
+}
+
+/* ---------- export ---------- */
+async function exportXlsx(){
+  try{
+    const dl=await claude.use('downloads'); if(!dl||typeof XLSX==='undefined'){toast('Export is not available in this view.',true);return;}
+    const rows=REC.filter(x=>!x.deleted).sort((a,b)=>(Number(a.rec[0])||0)-(Number(b.rec[0])||0));
+    const aoa=[COLS.map(c=>c.l)].concat(rows.map(x=>COLS.map(c=>{const v=x.rec[c.i]; if(v==null) return null; if(typeof v==='string'&&ISO.test(v)) return new Date(v+'T00:00:00Z'); return v;})));
+    const ws=XLSX.utils.aoa_to_sheet(aoa,{cellDates:true});
+    for(const a in ws){ if(a[0]!=='!'&&ws[a].t==='d') ws[a].z='dd-mmm-yyyy'; }
+    ws['!cols']=COLS.map(c=>({wch:Math.min(34,Math.max(12,c.l.length*0.8))})); ws['!freeze']={xSplit:2,ySplit:1}; ws['!autofilter']={ref:XLSX.utils.encode_range({s:{r:0,c:0},e:{r:rows.length,c:COLS.length-1}})};
+    const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'ENF-DPR');
+    const buf=XLSX.write(wb,{type:'array',bookType:'xlsx',cellDates:true});
+    await dl.save({filename:'Falcon-Telecom-ENF-DPR.xlsx',data:buf});
+    toast('Workbook saved');
+  }catch(e){ if(!e||e.code!=='declined') toast('Could not save the workbook.',true); }
+}
+
+/* ---------- misc ---------- */
+let tt; function toast(m,bad){const t=$('#toast'); t.textContent=m; t.className='on'+(bad?' bad':''); clearTimeout(tt); tt=setTimeout(()=>t.className='',3600);}
+const tip=$('#tip');
+document.addEventListener('mouseover',e=>{const el=e.target.closest('[data-tip]'); if(el){tip.textContent=el.dataset.tip; tip.style.display='block';} else tip.style.display='none';});
+document.addEventListener('mousemove',e=>{if(tip.style.display==='block'){const w=tip.offsetWidth; tip.style.left=Math.min(innerWidth-w-8,e.clientX+14)+'px'; tip.style.top=(e.clientY+16)+'px';}});
+document.addEventListener('click',e=>{
+  const t=e.target;
+  const m=t.closest('[data-miss]'); if(m){view.missing=+m.dataset.miss;view.page=1;view.deleted=false;renderTools();renderTable();$('#records').scrollIntoView({behavior:'smooth',block:'start'});return;}
+  const b=t.closest('[data-bucket]'); if(b){view.bucket=b.dataset.bucket;view.page=1;view.deleted=false;renderTools();renderTable();$('#records').scrollIntoView({behavior:'smooth',block:'start'});return;}
+  const rg=t.closest('[data-region]'); if(rg){view.region=rg.dataset.region;view.page=1;renderTools();renderTable();$('#records').scrollIntoView({behavior:'smooth',block:'start'});return;}
+  const s=t.closest('[data-sort]'); if(s){const k=s.dataset.sort; view.sort=view.sort.k===k?{k,d:-view.sort.d}:{k,d:(k==='gaps'||k==='tasks'||k==='ms')?-1:1}; renderTable();return;}
+  const dl=t.closest('[data-del]'); if(dl){askDelete(dl.dataset.del);return;}
+  const rs=t.closest('[data-restore]'); if(rs){restore(rs.dataset.restore);return;}
+  const ea=t.closest('[data-edit]'); if(ea){openEditor(ea.dataset.edit);return;}
+  const na=t.closest('[data-na]'); if(na&&ed){const f=na.closest('.fld'),tI=f.querySelector('input[type=text]'); f.querySelector('input[type=date]').value=''; tI.value='N/A'; setVal(+na.dataset.na,'N/A'); markEmpty(); return;}
+  const tb=t.closest('[data-tab]'); if(tb&&ed){showTab(tb.dataset.tab);return;}
+  const tr=t.closest('tbody tr[data-key]'); if(tr){openEditor(tr.dataset.key);}
+});
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape'){ if($('#modal').classList.contains('on')) $('#modal').classList.remove('on'); else if(ed) closeEditor(); return; }
+  if(e.key==='/'&&!/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)){e.preventDefault();$('#q').focus();}
+  if(e.key==='Enter'&&e.target.matches('tbody tr[data-key]')) openEditor(e.target.dataset.key);
+});
+$('#dbody').addEventListener('input',onField);
+$('#onlyEmpty').onchange=e=>$('#dbody').classList.toggle('only-empty',e.target.checked);
+$('#dClose').onclick=$('#dCancel').onclick=$('#scrim').onclick=closeEditor;
+$('#dSave').onclick=saveEditor;
+$('#dDelete').onclick=()=>ed&&askDelete(ed.key);
+$('#btnNew').onclick=()=>openEditor(null);
+$('#btnExport').onclick=exportXlsx;
+let qt; $('#q').addEventListener('input',e=>{clearTimeout(qt); qt=setTimeout(()=>{view.q=e.target.value;view.page=1;view.deleted=false;renderTools();renderTable();},120);});
+function setScope(s){view.scope=s;view.page=1;$('#scActive').setAttribute('aria-pressed',s==='active');$('#scAll').setAttribute('aria-pressed',s==='all');refresh();}
+$('#scActive').onclick=()=>setScope('active'); $('#scAll').onclick=()=>setScope('all');
+
+(async function boot(){
+  try{
+    const r=await fetch('sites.json'); if(!r.ok) throw new Error(r.status); BASE=await r.json();
+  }catch(e){
+    $('#tbody').innerHTML='<tr><td colspan="10"><div class="empty"><b>Site data did not load</b>Reload the page. If it keeps failing, the sites.json file is missing.</div></td></tr>'; return;
+  }
+  datalists(); REC=allRecords(); refresh();
+  try{ if(typeof XLSX!=='undefined'){ claude.use('downloads').then(d=>{ if(d) $('#btnExport').hidden=false; }).catch(()=>{}); } }catch(e){}
+  await initStore(); refresh();
+})();
+</script>
+
+</body></html>
